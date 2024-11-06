@@ -1,3 +1,105 @@
+// import React, { useState, useEffect } from "react";
+// import { pipeline } from "@huggingface/transformers";
+
+// const SpeechRecognition = () => {
+//   const [output, setOutput] = useState("");
+//   const [error, setError] = useState("");
+//   const [isRecording, setIsRecording] = useState(false);
+//   const [mediaRecorder, setMediaRecorder] = useState(null);
+//   const [audioBlob, setAudioBlob] = useState(null);
+
+//   useEffect(() => {
+//     if (audioBlob) {
+//       handleTranscribeAudio(audioBlob);
+//     }
+//   }, [audioBlob]);
+
+//   const handleStartRecording = async () => {
+//     try {
+//       setIsRecording(true);
+
+//       // Get user media (microphone)
+//       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+//       // Create a MediaRecorder to capture audio
+//       const recorder = new MediaRecorder(stream);
+//       const audioChunks = [];
+
+//       recorder.ondataavailable = (event) => {
+//         audioChunks.push(event.data);
+//       };
+
+//       recorder.onstop = () => {
+//         const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+//         setAudioBlob(audioBlob);
+//       };
+
+//       recorder.start();
+//       setMediaRecorder(recorder);
+//     } catch (err) {
+//       console.error("Error accessing microphone:", err);
+//       setError("Error: " + err.message);
+//     }
+//   };
+
+//   const handleStopRecording = () => {
+//     if (mediaRecorder) {
+//       mediaRecorder.stop();
+//       setIsRecording(false);
+//     }
+//   };
+
+//   const handleTranscribeAudio = async (audioBlob) => {
+//     try {
+//       // Create an automatic speech recognition pipeline with WebGPU acceleration
+//       const transcriber = await pipeline(
+//         "automatic-speech-recognition",
+//         "onnx-community/whisper-tiny.en",
+//         { dtype: "fp32", device: "webgpu" }
+//       );
+
+//       // Transcribe audio from the Blob (converted to URL)
+//       const audioUrl = URL.createObjectURL(audioBlob);
+//       const transcription = await transcriber(audioUrl);
+
+//       // Update the output state with transcribed text
+//       setOutput(transcription.text);
+//       setError("");
+//     } catch (err) {
+//       console.error("Error during pipeline execution:", err);
+//       setError("Error: " + err.message);
+//       setOutput("");
+//     }
+//   };
+
+//   return (
+//     <div>
+//       <h3>Speech Recognition</h3>
+//       <div>
+//         {!isRecording ? (
+//           <button onClick={handleStartRecording}>Start Recording</button>
+//         ) : (
+//           <button onClick={handleStopRecording}>Stop Recording</button>
+//         )}
+//       </div>
+//       {output && (
+//         <div>
+//           <h3>Transcription Output:</h3>
+//           <p>{output}</p>
+//         </div>
+//       )}
+//       {error && (
+//         <div>
+//           <h3>Error:</h3>
+//           <p>{error}</p>
+//         </div>
+//       )}
+//     </div>
+//   );
+// };
+
+// export default SpeechRecognition;
+
 import React, { useState, useRef } from "react";
 import { pipeline } from "@huggingface/transformers";
 const testPipeline = async () => {
