@@ -8,19 +8,17 @@ const SpeechRecognition = () => {
   const [transcriber, setTranscriber] = useState(null); // Transcriber function
   const audioChunksRef = useRef([]); // Ref to store audio chunks
   const mediaRecorderRef = useRef(null); // Ref to MediaRecorder
+  const audioContextRef = useRef(new (window.AudioContext || window.webkitAudioContext)()); // AudioContext for real-time processing
 
   // Load transcriber (Whisper model)
-
   useEffect(() => {
     const loadTranscriber = async () => {
       try {
-        
         const transcriberInstance = await pipeline(
           "automatic-speech-recognition",
           "onnx-community/whisper-tiny.en",
-          { dtype: "fp32",   } // Optionally configure the model for WebGPU/WASM if needed
+          { dtype: "fp32" } // Optionally configure the model for WebGPU/WASM if needed
         );
-
         setTranscriber(() => transcriberInstance);
         console.log("Transcriber loaded successfully.");
       } catch (err) {
@@ -38,16 +36,17 @@ const SpeechRecognition = () => {
       setIsRecording(true);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
+      const audioContext = audioContextRef.current;
 
       recorder.ondataavailable = async (event) => {
+        // Process audio chunks for real-time transcription
         audioChunksRef.current.push(event.data); // Collect audio chunks
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        await handleTranscribeAudio(audioBlob); // Process each chunk
       };
 
       recorder.onstop = async () => {
         setIsRecording(false);
-        // Process the audio chunks for transcription after stopping
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
-        await handleTranscribeAudio(audioBlob);
         audioChunksRef.current = []; // Clear audio chunks after processing
       };
 
