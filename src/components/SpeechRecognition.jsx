@@ -9,6 +9,26 @@ const SpeechRecognition = () => {
   const [transcriber, setTranscriber] = useState(null); // Transcriber function
   const audioChunksRef = useRef([]); // Ref to store audio chunks
 
+  useEffect(() =>{
+
+    const testPipeline = async () => {
+    try {
+      console.log("Attempting to load the pipeline...");
+      const pipe = await pipeline(
+        "automatic-speech-recognition",
+        "Xenova/whisper-tiny.en" // or try "whisper-medium"
+      );
+      console.log("Pipeline loaded successfully.");
+      return pipe;
+    } catch (error) {
+      console.error("Error loading pipeline:", error);
+    }
+  };
+  
+  testPipeline();
+  }, [])
+
+
   useEffect(() => {
     // Function to check WebGPU support
     const checkWebGPU = async () => {
