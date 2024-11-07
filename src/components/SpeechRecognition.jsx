@@ -1,64 +1,28 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { pipeline } from "@huggingface/transformers";
 
 const SpeechRecognition = () => {
   const [output, setOutput] = useState(""); // Holds the transcription output
   const [error, setError] = useState(""); // Holds any error messages
   const [isRecording, setIsRecording] = useState(false); // Recording status
-  const [mediaRecorder, setMediaRecorder] = useState(null); // MediaRecorder instance
   const [transcriber, setTranscriber] = useState(null); // Transcriber function
   const audioChunksRef = useRef([]); // Ref to store audio chunks
+  const mediaRecorderRef = useRef(null); // Ref to MediaRecorder
 
-  useEffect(() =>{
-
-    const testPipeline = async () => {
-    try {
-      console.log("Attempting to load the pipeline...");
-      const pipe = await pipeline(
-        "automatic-speech-recognition",
-        "Xenova/whisper-tiny.en" // or try "whisper-medium"
-      );
-      console.log("Pipeline loaded successfully.");
-      return pipe;
-    } catch (error) {
-      console.error("Error loading pipeline:", error);
-    }
-  };
-  
-  testPipeline();
-  }, [])
-
+  // Load transcriber (Whisper model)
 
   useEffect(() => {
-    // Function to check WebGPU support
-    const checkWebGPU = async () => {
-      try {
-        const adapter = await navigator.gpu?.requestAdapter();
-        return adapter !== undefined;
-      } catch {
-        return false;
-      }
-    };
-
-    // Load transcriber when component mounts
     const loadTranscriber = async () => {
       try {
-        const device = (await checkWebGPU()) ? "webgpu" : "wasm";
-        console.log(`Using device: ${device}`);
-
-        // Create an automatic speech recognition pipeline with WebGPU/WASM acceleration
+        
         const transcriberInstance = await pipeline(
           "automatic-speech-recognition",
           "onnx-community/whisper-tiny.en",
-          { dtype: "fp32", device: device }
+          { dtype: "fp32",   } // Optionally configure the model for WebGPU/WASM if needed
         );
 
-        if (typeof transcriberInstance === "function") {
-          setTranscriber(() => transcriberInstance); // Set transcriber if valid
-          console.log("Transcriber loaded successfully.");
-        } else {
-          throw new Error("Transcriber instance is not a callable function.");
-        }
+        setTranscriber(() => transcriberInstance);
+        console.log("Transcriber loaded successfully.");
       } catch (err) {
         console.error("Error loading transcription model:", err);
         setError("Error loading model: " + err.message);
@@ -69,7 +33,7 @@ const SpeechRecognition = () => {
   }, []);
 
   // Start recording audio
-  const handleStartRecording = async () => {
+  const handleStartRecording = useCallback(async () => {
     try {
       setIsRecording(true);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -77,34 +41,30 @@ const SpeechRecognition = () => {
 
       recorder.ondataavailable = async (event) => {
         audioChunksRef.current.push(event.data); // Collect audio chunks
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/wav",
-        });
-
-        // Process each audio chunk for transcription in real-time
-        if (transcriber && typeof transcriber === "function") {
-          await handleTranscribeAudio(audioBlob); // Transcribe the audio blob
-        }
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         setIsRecording(false);
+        // Process the audio chunks for transcription after stopping
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        await handleTranscribeAudio(audioBlob);
+        audioChunksRef.current = []; // Clear audio chunks after processing
       };
 
-      recorder.start();
-      setMediaRecorder(recorder);
+      mediaRecorderRef.current = recorder;
+      recorder.start(100); // Collect audio in small chunks (100ms) for real-time processing
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      setError("Error: " + err.message);
+      setError("Error accessing microphone: " + err.message);
     }
-  };
+  }, [transcriber]);
 
   // Stop recording audio
-  const handleStopRecording = () => {
-    if (mediaRecorder) {
-      mediaRecorder.stop();
+  const handleStopRecording = useCallback(() => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
     }
-  };
+  }, []);
 
   // Convert audioBlob to a URL for the transcriber
   const blobToUrl = (blob) => {
@@ -112,36 +72,37 @@ const SpeechRecognition = () => {
   };
 
   // Transcribe audio blob
-  const handleTranscribeAudio = async (audioBlob) => {
-    try {
-      if (!audioBlob) {
-        setError("Invalid audio data.");
-        return;
-      }
-
-      const audioUrl = blobToUrl(audioBlob); // Convert blob to URL
-      console.log("Audio URL:", audioUrl);
-
-      if (typeof transcriber === "function") {
-        const transcription = await transcriber(audioUrl);
-        console.log("Transcription result:", transcription);
-
-        if (transcription && transcription.text) {
-          setOutput((prev) => prev + " " + transcription.text);
-          setError(""); // Clear any previous errors
-        } else {
-          setError("No transcription text returned.");
+  const handleTranscribeAudio = useCallback(
+    async (audioBlob) => {
+      try {
+        if (!audioBlob) {
+          setError("Invalid audio data.");
+          return;
         }
-      } else {
-        setError("Transcriber is not properly initialized.");
+
+        const audioUrl = blobToUrl(audioBlob); // Convert blob to URL
+        console.log("Audio URL:", audioUrl);
+
+        if (transcriber) {
+          const transcription = await transcriber(audioUrl); // Transcribe audio blob
+          console.log("Transcription result:", transcription);
+
+          if (transcription && transcription.text) {
+            setOutput((prev) => prev + " " + transcription.text); // Append the transcribed text
+            setError(""); // Clear any previous errors
+          } else {
+            setError("No transcription text returned.");
+          }
+        } else {
+          setError("Transcriber is not properly initialized.");
+        }
+      } catch (error) {
+        console.error("Transcription error:", error);
+        setError("An error occurred during transcription.");
       }
-    } catch (error) {
-      console.error("Transcription error:", error);
-      setError("An error occurred during transcription.");
-    } finally {
-      URL.revokeObjectURL(audioUrl); // Revoke the URL to free memory
-    }
-  };
+    },
+    [transcriber]
+  );
 
   return (
     <div>
